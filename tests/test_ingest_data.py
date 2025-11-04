@@ -4,6 +4,8 @@ import zipfile
 import pandas as pd
 import pytest
 
+from pathlib import Path
+
 from src.ingest_data import ZipDataIngestor
 
 
@@ -21,7 +23,8 @@ def test_single_csv_ingest(tmp_path):
     zip_path = _make_zip(tmp_path, {"data.csv": csv}, "single.zip")
 
     ingestor = ZipDataIngestor()
-    df = ingestor.ingest(zip_path)
+    # use an explicit temp extract dir in tests to avoid polluting the repo
+    df = ingestor.ingest(zip_path, extract_dir=str(tmp_path))
 
     assert isinstance(df, pd.DataFrame)
     assert df.shape == (2, 2)
@@ -35,7 +38,7 @@ def test_multiple_csvs_concat(tmp_path):
     zip_path = _make_zip(tmp_path, {"one.csv": csv1, "two.csv": csv2}, "multi.zip")
 
     ingestor = ZipDataIngestor()
-    df = ingestor.ingest(zip_path)  # concat is True by default
+    df = ingestor.ingest(zip_path, extract_dir=str(tmp_path))  # concat is True by default
 
     assert isinstance(df, pd.DataFrame)
     # two files, each with 2 rows -> 4 rows total
@@ -51,7 +54,7 @@ def test_multiple_csvs_no_concat_raises(tmp_path):
 
     ingestor = ZipDataIngestor()
     with pytest.raises(ValueError):
-        _ = ingestor.ingest(zip_path, concat=False)
+        _ = ingestor.ingest(zip_path, extract_dir=str(tmp_path), concat=False)
 
 
 def test_extract_dir_keeps_files(tmp_path):
@@ -69,3 +72,47 @@ def test_extract_dir_keeps_files(tmp_path):
     files = os.listdir(extract_dir_path)
     assert any(f.lower().endswith(".csv") for f in files)
     assert df.shape == (1, 2)
+
+
+def test_default_extracts_to_data_processed(tmp_path):
+    """Verify that calling ingest without extract_dir writes into data/processed by default."""
+    csv = "p,q\n7,8\n"
+    zip_path = _make_zip(tmp_path, {"default_keep.csv": csv}, "default.zip")
+
+    ingestor = ZipDataIngestor()
+
+    repo_root = Path(__file__).resolve().parents[1]
+    expected_dir = repo_root / "data" / "processed"
+    existed_before = expected_dir.exists()
+
+    # Ensure consistent start
+    if not existed_before:
+        expected_dir.mkdir(parents=True, exist_ok=True)
+
+    # With the new behavior each archive is extracted into its own
+    # subdirectory under data/processed named after the archive stem.
+    archive_stem = "default"
+    archive_dir = expected_dir / archive_stem
+    target_file = archive_dir / "default_keep.csv"
+    if target_file.exists():
+        target_file.unlink()
+
+    try:
+        df = ingestor.ingest(zip_path)  # default behavior
+
+        assert df.shape == (1, 2)
+        assert target_file.exists()
+    finally:
+        # Clean up what we created in data/processed
+        if target_file.exists():
+            target_file.unlink()
+        # If the directory didn't exist before the test and is now empty, remove it
+        if not existed_before:
+            # remove the archive subdirectory if it is empty
+            try:
+                next(archive_dir.iterdir())
+            except (StopIteration, FileNotFoundError):
+                try:
+                    archive_dir.rmdir()
+                except OSError:
+                    pass

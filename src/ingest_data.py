@@ -20,8 +20,8 @@ class DataIngestor(ABC):
         """Ingest data from `file_path` and return a pandas DataFrame.
 
         If `extract_dir` is provided, any extracted files will be placed
-        there; otherwise a temporary directory will be used and cleaned up
-        automatically.
+        there. If omitted, files are extracted to `data/processed` under the
+        project root (created automatically) so outputs are easy to find.
         """
         raise NotImplementedError
 
@@ -42,54 +42,65 @@ class ZipDataIngestor(DataIngestor):
         if not zipfile.is_zipfile(file_path):
             raise ValueError(f"The file at {file_path} is not a valid zip file.")
 
-        # Use a temporary directory unless an explicit extract_dir is given
-        temp_dir_ctx = tempfile.TemporaryDirectory() if extract_dir is None else None
-        target_dir = temp_dir_ctx.name if temp_dir_ctx is not None else extract_dir
+        # Default extraction directory: repository/data/processed
+        # If the caller provides an explicit `extract_dir` we use it and leave
+        # the extracted files in place. When `extract_dir` is None we ensure
+        # `data/processed` exists at the project root and extract there.
+        if extract_dir is None:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            # Extract each archive into its own subfolder under data/processed
+            target_dir = os.path.join(project_root, "data", "processed", base_name)
+            os.makedirs(target_dir, exist_ok=True)
+            temp_dir_ctx = None
+        else:
+            target_dir = extract_dir
+            temp_dir_ctx = None
 
-        try:
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                zip_ref.extractall(target_dir)
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall(target_dir)
 
             extracted_files = os.listdir(target_dir)
-            csv_files = [f for f in extracted_files if f.lower().endswith('.csv')]
-            if len(csv_files) == 0:
-                raise ValueError("No CSV files found in the zip archive.")
 
-            # If there are multiple CSVs we either concatenate them or raise
-            # depending on the `concat` flag. Concatenation is the default
-            # behavior and will vertically stack all CSVs (resetting the
-            # index).
-            csv_paths = [os.path.join(target_dir, f) for f in csv_files]
-            if len(csv_paths) == 1:
-                df = pd.read_csv(csv_paths[0])
+            # Support CSV and TSV files inside archives. TSVs are common for
+            # datasets; we detect the extension and pass a suitable sep to
+            # pandas.read_csv.
+            data_files = [f for f in extracted_files if f.lower().endswith(('.csv', '.tsv'))]
+            if len(data_files) == 0:
+                raise ValueError("No CSV/TSV files found in the zip archive.")
+
+            data_paths = [os.path.join(target_dir, f) for f in data_files]
+            if len(data_paths) == 1:
+                p = data_paths[0]
+                if p.lower().endswith('.tsv'):
+                    df = pd.read_csv(p, sep='\t')
+                else:
+                    df = pd.read_csv(p)
                 return df
 
-            # multiple CSVs
+            # multiple files: either concatenate or raise based on concat flag
             if not concat:
                 raise ValueError(
-                    "Multiple CSV files found in the zip archive; set concat=True to concatenate them."
+                    "Multiple data files found in the zip archive; set concat=True to concatenate them."
                 )
 
-            # Read and concatenate all CSVs. This assumes compatible columns
-            # across files; if schemas differ you may wish to provide more
-            # robust merging/aligning logic.
-            dfs = [pd.read_csv(p) for p in csv_paths]
+            dfs = []
+            for p in data_paths:
+                if p.lower().endswith('.tsv'):
+                    dfs.append(pd.read_csv(p, sep='\t'))
+                else:
+                    dfs.append(pd.read_csv(p))
+
             df = pd.concat(dfs, ignore_index=True)
             return df
-        finally:
-            # Clean up the temporary directory if we created one. If an
-            # explicit extract_dir was provided we leave it alone so the
-            # caller can inspect extracted files.
-            if temp_dir_ctx is not None:
-                temp_dir_ctx.cleanup()
-
+        
 
 class DataIngestionFactory:
     """Factory to obtain an appropriate DataIngestor for a given file.
 
     Usage example:
-        ingestor = DataIngestionFactory.get_ingestor_for_path('data/archive.zip')
-        df = ingestor.ingest('data/archive.zip')
+        ingestor = DataIngestionFactory.get_ingestor_for_path('data/raw/archive.zip')
+        df = ingestor.ingest('data/raw/archive.zip')
     """
 
     @staticmethod
