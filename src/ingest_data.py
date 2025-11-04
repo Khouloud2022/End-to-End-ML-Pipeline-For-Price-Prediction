@@ -16,7 +16,7 @@ class DataIngestor(ABC):
     """
 
     @abstractmethod
-    def ingest(self, file_path: str, extract_dir: Optional[str] = None) -> pd.DataFrame:
+    def ingest(self, file_path: str, extract_dir: Optional[str] = None, *, concat: bool = True) -> pd.DataFrame:
         """Ingest data from `file_path` and return a pandas DataFrame.
 
         If `extract_dir` is provided, any extracted files will be placed
@@ -27,15 +27,15 @@ class DataIngestor(ABC):
 
 
 class ZipDataIngestor(DataIngestor):
-    """Ingestor for ZIP archives that contain a single CSV file.
+    """Ingestor for ZIP archives that contain one or more CSV files.
 
     This implementation extracts the ZIP to a temporary directory (by
-    default), finds a single CSV file, reads it with pandas and returns the
-    resulting DataFrame. If multiple or zero CSV files are present an error
-    is raised.
+    default), finds CSV files, reads them with pandas and returns the
+    resulting DataFrame. If multiple CSV files are present they are
+    concatenated by default; pass `concat=False` to raise instead.
     """
 
-    def ingest(self, file_path: str, extract_dir: Optional[str] = None) -> pd.DataFrame:
+    def ingest(self, file_path: str, extract_dir: Optional[str] = None, *, concat: bool = True) -> pd.DataFrame:
         # Basic validation: ensure the path exists and is a zip file
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"The file {file_path} does not exist.")
@@ -54,16 +54,27 @@ class ZipDataIngestor(DataIngestor):
             csv_files = [f for f in extracted_files if f.lower().endswith('.csv')]
             if len(csv_files) == 0:
                 raise ValueError("No CSV files found in the zip archive.")
-            if len(csv_files) > 1:
+
+            # If there are multiple CSVs we either concatenate them or raise
+            # depending on the `concat` flag. Concatenation is the default
+            # behavior and will vertically stack all CSVs (resetting the
+            # index).
+            csv_paths = [os.path.join(target_dir, f) for f in csv_files]
+            if len(csv_paths) == 1:
+                df = pd.read_csv(csv_paths[0])
+                return df
+
+            # multiple CSVs
+            if not concat:
                 raise ValueError(
-                    "Multiple CSV files found in the zip archive; expected only one."
+                    "Multiple CSV files found in the zip archive; set concat=True to concatenate them."
                 )
 
-            csv_file_path = os.path.join(target_dir, csv_files[0])
-            # Read CSV into pandas DataFrame. If you need custom parsing
-            # (dtypes, separators, encoding) add kwargs here or expose them
-            # through the method signature.
-            df = pd.read_csv(csv_file_path)
+            # Read and concatenate all CSVs. This assumes compatible columns
+            # across files; if schemas differ you may wish to provide more
+            # robust merging/aligning logic.
+            dfs = [pd.read_csv(p) for p in csv_paths]
+            df = pd.concat(dfs, ignore_index=True)
             return df
         finally:
             # Clean up the temporary directory if we created one. If an
