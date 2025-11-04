@@ -1,4 +1,4 @@
-﻿# End to End ML Pipeline For Price Prediction — Environment quickstart
+﻿# End to End ML Pipeline For Price Prediction using ZenML and  Mlflow
 
 This project includes a pinned `requirements.txt` that reproduces the working virtual environment used during development.
 
