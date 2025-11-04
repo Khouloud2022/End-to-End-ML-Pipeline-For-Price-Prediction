@@ -1,0 +1,83 @@
+﻿.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+*.egg
+.coverage
+htmlcov/
+.env
+.env.*
+.DS_Store
+.ipynb_checkpoints/
+*.pytest_cache/
+.vscode/
+installed-freeze.txt
+*.log
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.coverage
+.tox/
+.nox/
+
+# Sphinx documentation
+docs/_build/
+
+# pyenv
+.python-version
+
+# mypy
+.mypy_cache/
+.dmypy.json
+.cache/
+
+# IDEs
+.idea/
+.vscode/
+
+# macOS
+*.DS_Store
+
+# Windows
+Thumbs.db
+
+# Local data
+
+
+# Jupyter
+
+
+# Secrets
+secrets.json
+
+# Optional: freeze file
+requirements-freeze.txt
