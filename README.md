@@ -88,8 +88,3 @@ Troubleshooting: MLflow / ZenML on Windows
 		.\.venv\Scripts\python -m pip install sqlalchemy-utils
 		```
 
-Notes & next steps
-
-- `requirements.txt` pins a working runtime environment. If you plan to reproduce or extend this project on Windows, the conda path is usually the fastest way to avoid wheel/build tool issues.
-- If you want, I can: regenerate a minimal runtime-only `requirements.txt`, add CI to install and run tests, or add a short section describing how to run the EDA notebook headlessly.
-
