@@ -65,7 +65,7 @@ class SimpleMultivariateAnalysis(MultivariateAnalysisTemplate):
         None: Displays a heatmap showing correlations between numerical features.
         """
         plt.figure(figsize=(12, 10))
-        sns.heatmap(df.corr(), annot=True, fmt=".2f", cmap="coolwarm", linewidths=0.5)
+        sns.heatmap(df.corr(), annot=True, fmt=".2f", cmap="vanimo", linewidths=0.5)
         plt.title("Correlation Heatmap")
         plt.show()
 
